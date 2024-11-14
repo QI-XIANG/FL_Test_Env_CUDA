@@ -56,31 +56,37 @@ class Client(object):
 
 
     def load_train_data(self, batch_size=None):
-        if batch_size == None:
+        if batch_size is None:
             batch_size = self.batch_size
         train_data = read_client_data(self.dataset, self.id, is_train=True)
 
         train_data_poison = []
 
         if self.dataset == 'CelebA':
-            # print("attack starting")
+            # Attack logic for CelebA dataset (specific label change example)
             for data in train_data:
                 data = list(data)
                 if data[1] == 1:
-                    data[1] = torch.tensor(1)
+                    data[1] = torch.tensor(1)  # example transformation, adjust as needed
                 train_data_poison.append(tuple(data))
             train_data = train_data_poison
         else:
+            # Apply poisoning attack if this client is marked as poisoned
             if self.poisoned:
-                # print("attack starting")
                 for data in train_data:
-                    data = list(data)
+                    data = list(data)  # Convert to list for easy modification
+                    # Apply label flipping based on attack strategy
                     if data[1] == 1:
-                        data[1] = torch.tensor(9)
-                    train_data_poison.append(tuple(data))
+                        data[1] = torch.tensor(9)  # Change label 1 to 9
+                    if data[1] == 2:
+                        data[1] = torch.tensor(7)  # Change label 2 to 7
+                    if data[1] == 9:
+                        data[1] = torch.tensor(1)  # Change label 9 to 1
+                    train_data_poison.append(tuple(data))  # Append modified data
                 train_data = train_data_poison
-            
+
         return DataLoader(train_data, batch_size, drop_last=True, shuffle=False)
+
 
     def load_test_data(self, batch_size=None):
         if batch_size == None:

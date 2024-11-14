@@ -92,6 +92,10 @@ class FedAvg(Server):
                 # s = [c.id for c in self.selected_clients]
                 # print(s)
 
+                # Identify poisoned clients among Bulyan-selected clients
+                poisoned_selected = [idx for idx in selected_ids if self.clients[idx].poisoned]
+                print(f"Poisoned clients among FedAvg clients: {poisoned_selected}")
+
                 # => mh code 
                 
                 '''

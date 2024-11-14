@@ -138,7 +138,12 @@ class FedCosineRobustBulyan(Server):
                 
                 # Filter out poisoned clients using robust Bulyan selection based on cosine similarity
                 bulyan_client_indices = self.robust_bulyan(clients_weight, int(self.num_join_clients * self.poisoned_ratio), drop_percentage=0.1)
-                print("Selected clients after Bulyan:", bulyan_client_indices)
+                bulyan_selected = [idx for idx in bulyan_client_indices]
+                print(f"Selected clients after Bulyan:{bulyan_selected}")
+
+                # Identify poisoned clients among Bulyan-selected clients
+                poisoned_selected = [idx for idx in bulyan_client_indices if self.clients[idx].poisoned]
+                print(f"Poisoned clients among Bulyan-selected clients: {poisoned_selected}")
 
                 # Aggregate the selected models
                 aggregated_model = self.aggregate_models([self.uploaded_models[idx] for idx in bulyan_client_indices])

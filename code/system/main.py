@@ -20,6 +20,7 @@ from flcore.servers.serverbulyan import FedBulyan
 from flcore.servers.serverbulyan_advanced import FedBulyanAdvanced
 from flcore.servers.serverbulyanrobust import FedRobustBulyan
 from flcore.servers.serverbulyancosinerobust import FedCosineRobustBulyan
+from flcore.servers.serverbulyanepsilondecay import FedEpsilonDecayBulyan
 
 from flcore.trainmodel.models import *
 
@@ -68,6 +69,8 @@ def run(args):
                 args.model = FedAvgCNN(in_features=1, num_classes=args.num_classes, dim=1024).to(args.device)
             elif "fmnist30" in args.dataset:
                 args.model = FedAvgCNN(in_features=1, num_classes=args.num_classes, dim=1024).to(args.device)
+            elif "fmnist40" in args.dataset:
+                args.model = FedAvgCNN(in_features=1, num_classes=args.num_classes, dim=1024).to(args.device)
             elif "Cifar10" in args.dataset:
                 args.model = FedAvgCNN(in_features=3, num_classes=args.num_classes, dim=1600).to(args.device)
             elif "omniglot" in args.dataset:
@@ -112,6 +115,9 @@ def run(args):
 
         elif args.algorithm == "FedBulyanCosineRobust":
             server = FedCosineRobustBulyan(args, i)
+        
+        elif args.algorithm == "FedEpsilonDecayBulyan":
+            server = FedEpsilonDecayBulyan(args, i)
         
         elif args.algorithm == "FedBulyanAdvanced":
             server = FedBulyanAdvanced(args, i)
