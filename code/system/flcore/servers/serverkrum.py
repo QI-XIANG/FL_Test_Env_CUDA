@@ -109,6 +109,10 @@ class FedKrum(Server):
                 print("selected clients:", selected_ids)
                 self.selected_clients = [self.clients[c] for c in selected_ids]
 
+                # Identify poisoned clients among Bulyan-selected clients
+                poisoned_selected = [idx for idx in selected_ids if self.clients[idx].poisoned]
+                print(f"Poisoned clients in selected clients: {poisoned_selected}")
+                # <= mh code
                 # self.selected_clients = self.select_clients()
                 # s = [c.id for c in self.selected_clients]
                 # print(s)
