@@ -21,6 +21,10 @@ from flcore.servers.serverbulyan_advanced import FedBulyanAdvanced
 from flcore.servers.serverbulyanrobust import FedRobustBulyan
 from flcore.servers.serverbulyancosinerobust import FedCosineRobustBulyan
 from flcore.servers.serverbulyanepsilondecay import FedEpsilonDecayBulyan
+from flcore.servers.serverfedadaptivetrimmedbulyan import RobustFedBulyan
+from flcore.servers.serverfedadaptivetrimmedbulyanR import RobustFedBulyanR
+from flcore.servers.serverfedadaptivetrimmedbulyanRR import RobustFedBulyanRR
+from flcore.servers.serverfedadaptivetrimmedbulyanRRR import RobustFedBulyanRRR
 
 from flcore.trainmodel.models import *
 
@@ -122,6 +126,18 @@ def run(args):
         elif args.algorithm == "FedBulyanAdvanced":
             server = FedBulyanAdvanced(args, i)
         
+        elif args.algorithm == "FedRFB":
+            server = RobustFedBulyan(args, i)
+        
+        elif args.algorithm == "FedRFBR":
+           server = RobustFedBulyanR(args, i)
+        
+        elif args.algorithm == "FedRFBRR":
+            server = RobustFedBulyanRR(args, i)
+        
+        elif args.algorithm == "FedRFBRRR":
+            server = RobustFedBulyanRRR(args, i)
+
         else:
             raise NotImplementedError
 

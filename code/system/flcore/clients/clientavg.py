@@ -8,8 +8,12 @@ from utils.privacy import *
 class clientAVG(Client):
     def __init__(self, args, id, train_samples, test_samples, **kwargs):
         super().__init__(args, id, train_samples, test_samples, **kwargs)
+        self.criterion = nn.CrossEntropyLoss()  # Assuming classification task, adjust if necessary
 
     def train(self):
+        """
+        Train the model on the client side.
+        """
         trainloader = self.load_train_data()
         self.model.train()
 
@@ -51,5 +55,26 @@ class clientAVG(Client):
 
         if self.privacy:
             eps, DELTA = get_dp_params(privacy_engine)
-            print(f"Client {self.id}: epsilon = {eps:.2f}, sigma = {DELTA}")
+            print(f"Client {self.id}: epsilon = {eps:.2f}, delta = {DELTA}")
 
+    def compute_loss(self):
+        """
+        Compute the average loss of the model on the client's test set.
+        """
+        self.model.eval()  # Set the model to evaluation mode
+        total_loss = 0.0
+        total_samples = 0
+
+        testloader = self.load_test_data()  # Assuming there's a method to load test data
+        with torch.no_grad():  # No need to track gradients during evaluation
+            for x, y in testloader:
+                x = x.to(self.device)
+                y = y.to(self.device)
+                
+                outputs = self.model(x)  # Forward pass
+                loss = self.criterion(outputs, y)  # Compute loss
+                total_loss += loss.item() * x.size(0)  # Accumulate loss weighted by batch size
+                total_samples += x.size(0)  # Keep track of the total number of samples
+
+        average_loss = total_loss / total_samples  # Calculate the average loss
+        return average_loss
