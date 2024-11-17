@@ -300,6 +300,7 @@ class Server(object):
             selected_clients.append(self.clients[id])    
 
         return selected_clients
+    
 
     def send_models_bn(self):
         assert (len(self.clients) > 0)

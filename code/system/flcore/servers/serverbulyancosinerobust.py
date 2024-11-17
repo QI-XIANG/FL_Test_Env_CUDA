@@ -13,6 +13,7 @@ from flcore.servers.client_selection.Thompson import Thompson
 from flcore.servers.client_selection.UCB import UCB
 from flcore.servers.client_selection.RCS import RandomClusterSelection
 from flcore.servers.client_selection.DECS import DiversityEnhancedClusterSelection
+from flcore.servers.client_selection.AUCB import AdaptiveUCB
 
 class FedCosineRobustBulyan(Server):
     def __init__(self, args, times, agent=None):
@@ -110,6 +111,8 @@ class FedCosineRobustBulyan(Server):
             select_agent = DiversityEnhancedClusterSelection(self.num_clients, self.num_join_clients, self.random_join_ratio)
         elif self.args.select_clients_algorithm == "UCB":
             select_agent = UCB(self.num_clients, self.num_join_clients)
+        elif self.args.select_clients_algorithm == "AUCB":
+            select_agent = AdaptiveUCB(self.num_clients, self.num_join_clients)
         elif self.args.select_clients_algorithm == "Thompson":
             select_agent = Thompson(num_clients=self.num_clients, num_selections=self.num_join_clients)
 
