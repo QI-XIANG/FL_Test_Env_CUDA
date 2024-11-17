@@ -27,6 +27,7 @@ from flcore.servers.serverfedadaptivetrimmedbulyanRR import RobustFedBulyanRR
 from flcore.servers.serverfedadaptivetrimmedbulyanRRR import RobustFedBulyanRRR
 from flcore.servers.serverfedadaptivetrimmedbulyanRRRR import RobustFedBulyanRRRR
 from flcore.servers.serverARFedAvg import AdaptiveRobustFedAvg
+from flcore.servers.serverARFedAvgR import AdaptiveRobustFedAvgR
 
 from flcore.trainmodel.models import *
 
@@ -145,6 +146,9 @@ def run(args):
 
         elif args.algorithm == "ARFedAvg":
             server = AdaptiveRobustFedAvg(args, i)
+
+        elif args.algorithm == "ARFedAvgR":
+            server = AdaptiveRobustFedAvgR(args, i)
 
         else:
             raise NotImplementedError
