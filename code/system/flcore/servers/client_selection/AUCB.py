@@ -53,6 +53,6 @@ class AdaptiveUCB:
             else:
                 self.trust_scores[client] *= self.trust_decay  # Decay trust score over time
 
-        #print("Updated trust scores:", self.trust_scores)
-        #print("sums of reward: ", self.sums_of_reward)
-        #print("number of selections: ", self.numbers_of_selections)  # Debugging line
+        print("Updated trust scores:", self.trust_scores)
+        print("sums of reward: ", self.sums_of_reward)
+        print("number of selections: ", self.numbers_of_selections)  # Debugging line

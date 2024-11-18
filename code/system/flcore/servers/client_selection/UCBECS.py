@@ -106,3 +106,18 @@ class UCBEnhancedClusterSelection:
         print(f"Clients selected with UCB at epoch {epoch}: {selected_clients_with_ucb}")
 
         return selected_clients_with_ucb[:num_join_clients]
+    
+    def update(self, selected_ids, clients_acc):
+        """
+        Update the performance estimates and confidence bounds for selected clients.
+        
+        Args:
+            selected_ids (list): Indices of the selected clients.
+            clients_acc (list): Corresponding accuracies for the selected clients.
+        """
+        for client_idx, performance in zip(selected_ids, clients_acc):
+            round_num = len(self.selected_clients_history) + 1
+            self.update_confidence_bounds(client_idx, performance, round_num)
+        
+        # Track selected clients for this round
+        self.selected_clients_history.append(selected_ids)

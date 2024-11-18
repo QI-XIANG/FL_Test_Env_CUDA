@@ -134,6 +134,8 @@ class RobustFedBulyanRRRR(Server):
             select_agent = UCBEnhancedClusterSelection(self.num_clients, self.num_join_clients, self.random_join_ratio)
         elif self.args.select_clients_algorithm == "AUCB":
             select_agent = AdaptiveUCB(self.num_clients, self.num_join_clients)
+        elif self.args.select_clients_algorithm == "Thompson":
+            select_agent = Thompson(num_clients=self.num_clients, num_selections=self.num_join_clients)
 
         mlflow.set_experiment(self.select_clients_algorithm)
         with mlflow.start_run(run_name=f"noniid_wbn_{self.num_clients * self.poisoned_ratio}_FedBulyan"):

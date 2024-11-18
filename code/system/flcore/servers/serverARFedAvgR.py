@@ -11,7 +11,7 @@ from flcore.servers.client_selection.Thompson import Thompson
 from flcore.servers.client_selection.UCB import UCB
 from flcore.servers.client_selection.AUCB import AdaptiveUCB
 from flcore.servers.client_selection.RCS import RandomClusterSelection
-
+from flcore.servers.client_selection.UCBECS import UCBEnhancedClusterSelection
 
 class AdaptiveRobustFedAvgR(Server):
     def __init__(self, args, times, agent=None):
@@ -130,6 +130,8 @@ class AdaptiveRobustFedAvgR(Server):
             return UCB(self.num_clients, self.num_join_clients)
         elif self.client_selection_algorithm == "AUCB":
             return AdaptiveUCB(self.num_clients, self.num_join_clients)
+        elif self.client_selection_algorithm == "UCBECS":
+            return UCBEnhancedClusterSelection(self.num_clients, self.num_join_clients, self.random_join_ratio)
         elif self.client_selection_algorithm == "Thompson":
             return Thompson(num_clients=self.num_clients, num_selections=self.num_join_clients)
         else:
