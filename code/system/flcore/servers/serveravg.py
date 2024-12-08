@@ -321,6 +321,8 @@ class FedAvg(Server):
                     
                     if self.select_clients_algorithm in ["RSVD", "RSVDUCB", "RSVDUCBT"] and self.gradients_available:
                         acc, train_loss, auc = self.evaluate_trust()
+                    elif self.select_clients_algorithm == "UCB":
+                        acc, train_loss, auc = self.evaluate_trust()
                     else:
                         acc, train_loss, auc = self.evaluate()
                     

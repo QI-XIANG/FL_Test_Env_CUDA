@@ -1,5 +1,5 @@
 artifact_uri: file:///C:/Users/a0905/OneDrive/Desktop/FLT%28CUDA_Version%29/FL_Test_Env/code/system/mlruns/336817747332220662/aa068998b83745479147c7431fae3e24/artifacts
-end_time: null
+end_time: 1733679698299
 entry_point_name: ''
 experiment_id: '336817747332220662'
 lifecycle_stage: active
@@ -10,6 +10,6 @@ source_name: ''
 source_type: 4
 source_version: ''
 start_time: 1733678326680
-status: 1
+status: 4
 tags: []
 user_id: a0905

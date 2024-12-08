@@ -1,8 +1,6 @@
 import numpy as np
 import math
 from sklearn.utils.extmath import randomized_svd
-from sklearn.ensemble import IsolationForest
-from statsmodels.tsa.arima.model import ARIMA
 import copy
 
 class RSVDUCBClientSelection:
@@ -27,34 +25,21 @@ class RSVDUCBClientSelection:
         self.numbers_of_selections = np.zeros(num_clients)
         self.sums_of_rewards = np.zeros(num_clients)
 
-        # 孤立森林模型
-        self.isolation_forest = IsolationForest()
-        
-        # ARIMA 時序模型
-        self.arima_models = [None] * num_clients
-        self.arima_past_rewards = [list() for _ in range(num_clients)]
-
     def detect_poisoned_clients(self, gradients):
         """
-        使用 RSVD 和孤立森林檢測異常分數
+        使用 RSVD 檢測異常分數
         :param gradients: 各客戶端的本地梯度更新 (形狀為 [num_clients, gradient_dim])
         :return: 各客戶端的異常分數
         """
         client_ids = list(gradients.keys())
         gradients = np.vstack(list(gradients.values()))
-        
-        # RSVD 部分
         u, s, vt = randomized_svd(gradients, n_components=2, random_state=42)
         reconstructed = np.dot(np.dot(u, np.diag(s)), vt)
         errors = np.linalg.norm(gradients - reconstructed, axis=1)
 
-        # 孤立森林檢測
-        isolation_scores = self.isolation_forest.fit_predict(gradients)
-        isolation_scores = np.where(isolation_scores == 1, 0, 1)  # 將 -1 (異常) 轉為 1，1 (正常) 轉為 0
-
         # 平滑異常分數
         for i, client_id in enumerate(client_ids):
-            self.anomaly_scores[client_id] = 0.8 * self.anomaly_scores[client_id] + 0.2 * (errors[i] + isolation_scores[i])
+            self.anomaly_scores[client_id] = 0.8 * self.anomaly_scores[client_id] + 0.2 * errors[i]
 
         return self.anomaly_scores
 
@@ -62,6 +47,7 @@ class RSVDUCBClientSelection:
         """
         動態調整異常分數的閾值
         """
+        # 更新閾值為當前異常分數的中位數加偏移量
         median_score = np.median(self.anomaly_scores)
         self.poisoned_threshold = median_score + 0.1  # 動態偏移
         print(f"Updated poisoned threshold to {self.poisoned_threshold}")
@@ -88,7 +74,7 @@ class RSVDUCBClientSelection:
         :param gradients: 各客戶端的本地梯度更新
         :return: 選定的客戶端列表
         """
-        # RSVD + 孤立森林: 檢測異常分數
+        # RSVD: 檢測異常分數
         anomaly_scores = self.detect_poisoned_clients(gradients)
 
         # 動態調整異常閾值
@@ -121,7 +107,6 @@ class RSVDUCBClientSelection:
         for client in selected_clients:
             self.numbers_of_selections[client] += 1
 
-        #print(f"Epoch {epoch}: Selected Clients - {selected_clients}")
         print(f"Epoch {epoch}: Anomaly Scores - {anomaly_scores}")
         return selected_clients
 
@@ -131,26 +116,6 @@ class RSVDUCBClientSelection:
         :param selected_clients: 被選中的客戶端列表
         :param rewards: 客戶端的績效分數
         """
-        # 更新每個客戶端的歷史獎勳
         for client, reward in zip(selected_clients, rewards):
             self.sums_of_rewards[client] += reward
             self.numbers_of_selections[client] += 1
-
-            # 記錄客戶端的獎勳進行 ARIMA 時序預測
-            self.arima_past_rewards[client].append(reward)
-
-            # 如果歷史資料足夠長，訓練 ARIMA 模型
-            if len(self.arima_past_rewards[client]) > 5:
-                arima_model = ARIMA(self.arima_past_rewards[client], order=(1, 0, 1))  # ARIMA(1, 0, 1)
-                arima_fit = arima_model.fit()
-                self.arima_models[client] = arima_fit
-
-            # 如果 ARIMA 預測出異常獎勳，則進行進一步的篩選
-            if self.arima_models[client]:
-                arima_forecast = self.arima_models[client].forecast(steps=1)
-                if abs(reward - arima_forecast[0]) > 0.5:  # 如果偏差過大，視為異常
-                    print(f"Client {client} shows abnormal reward behavior, with forecasted reward of {arima_forecast[0]}")
-                    self.anomaly_scores[client] = 1.0  # 標記為異常
-
-        #print("Updated Rewards:", self.sums_of_rewards)
-        #print("Updated Selections:", self.numbers_of_selections)
