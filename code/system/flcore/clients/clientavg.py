@@ -78,3 +78,19 @@ class clientAVG(Client):
 
         average_loss = total_loss / total_samples  # Calculate the average loss
         return average_loss
+    
+    def get_training_gradients(self):
+        gradient_matrix = []  # Collect the gradients here
+
+        for param in self.model.parameters():
+            if param.grad is not None:
+                gradient_matrix.append(param.grad.view(-1))  # Flatten gradients for each parameter
+
+        # Concatenate the gradients into a single tensor to ensure homogeneity
+        gradient_matrix = torch.cat(gradient_matrix)
+
+        # Move gradients to CPU and convert to NumPy
+        gradient_matrix = gradient_matrix.cpu().numpy()
+
+        return gradient_matrix
+

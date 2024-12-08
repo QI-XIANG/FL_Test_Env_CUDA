@@ -15,7 +15,8 @@ import numpy as np
 from flcore.servers.client_selection.Random import Random
 from flcore.servers.client_selection.Thompson import Thompson
 from flcore.servers.client_selection.UCB import UCB
-
+from flcore.servers.client_selection.GAC import GAClientSelection
+from flcore.servers.client_selection.DMSS import DynamicMultiStrategySelection
 
 
 class FedUCBN(Server):
@@ -60,6 +61,12 @@ class FedUCBN(Server):
         #     state = self.get_state()
         #     action = self.agent.select_action(state)
         #     self.selected_clients = [self.clients[c] for c in action]
+        
+        elif self.select_clients_algorithm == "GAC":
+            select_agent = GAClientSelection(self.num_clients, self.num_join_clients)
+
+        elif self.select_clients_algorithm == "DMSS":
+            select_agent = DynamicMultiStrategySelection(self.num_clients, self.num_join_clients)
         
         elif self.select_clients_algorithm == "Thompson":
             select_agent = Thompson(num_clients=self.num_clients, num_selections=self.num_join_clients)

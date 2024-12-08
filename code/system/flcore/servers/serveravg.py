@@ -17,6 +17,11 @@ from flcore.servers.client_selection.Thompson import Thompson
 from flcore.servers.client_selection.UCB import UCB
 from flcore.servers.client_selection.RCS import RandomClusterSelection
 from flcore.servers.client_selection.DECS import DiversityEnhancedClusterSelection
+from flcore.servers.client_selection.GAC import GAClientSelection
+from flcore.servers.client_selection.DMSS import DynamicMultiStrategySelection
+from flcore.servers.client_selection.RSVD import RSVDClientDetection
+from flcore.servers.client_selection.RSVDUCB import RSVDUCBClientSelection
+from flcore.servers.client_selection.RSVDUCBT import RSVDUCBThompson
 
 class FedAvg(Server):
     def __init__(self, args, times, agent = None):
@@ -29,7 +34,13 @@ class FedAvg(Server):
         self.set_clients(args, clientAVG)
         self.robustLR_threshold = 7
         self.server_lr = 1e-3
+        
+        # Initialize client gradients (RSVD purpose)
+        self.client_gradients = {}  # Store gradients for each client
+        self.gradients_available = False  # Flag to track if gradients are available
 
+        self.model = args.model
+        
         print(f"\nJoin ratio / total clients: {self.join_ratio} / {self.num_clients}")
         print("Finished creating server and clients.")
 
@@ -45,6 +56,7 @@ class FedAvg(Server):
             v.append(model.state_dict()[key].view(-1))
         return torch.cat(v)
     
+    
     def train(self):
         self.send_models() #initialize model
         testloaderfull = self.get_test_data()
@@ -57,6 +69,16 @@ class FedAvg(Server):
             select_agent = DiversityEnhancedClusterSelection(self.num_clients, self.num_join_clients, self.random_join_ratio)
         elif self.select_clients_algorithm == "UCB":
             select_agent = UCB(self.num_clients, self.num_join_clients)
+        elif self.select_clients_algorithm == "GAC":
+            select_agent = GAClientSelection(self.num_clients, self.num_join_clients)
+        elif self.select_clients_algorithm == "DMSS":
+            select_agent = DynamicMultiStrategySelection(self.num_clients, self.num_join_clients)
+        elif self.select_clients_algorithm == "RSVD":
+            select_agent = RSVDClientDetection(self.num_clients, self.num_join_clients)
+        elif self.select_clients_algorithm == "RSVDUBC":
+            select_agent = RSVDUCBClientSelection(self.num_clients, self.num_join_clients)
+        elif self.select_clients_algorithm == "RSVDUCBT":
+            select_agent = RSVDUCBThompson(self.num_clients, self.num_join_clients)
 
         # elif self.args.selected_clients_algorithm == "DQN":
         #     state = self.get_state()
@@ -76,6 +98,40 @@ class FedAvg(Server):
             for i in range(self.global_rounds+1):
                 s_t = time.time()
                 
+                # If RSVD is selected, we pass gradients for each round
+                if self.select_clients_algorithm == "RSVD":
+                    # For the first round, use random selection
+                    if not self.gradients_available:
+                        select_agent = Random(self.num_clients, self.num_join_clients, self.random_join_ratio)
+                        selected_ids = select_agent.select_clients(i)
+                    else:
+                        # After the first round, pass actual gradients
+                        select_agent = RSVDClientDetection(self.num_clients, self.num_join_clients)
+                        selected_ids = select_agent.select_clients(i, self.client_gradients)
+                elif self.select_clients_algorithm == "RSVDUCB":
+                    # For the first round, use random selection
+                    if not self.gradients_available:
+                        select_agent = Random(self.num_clients, self.num_join_clients, self.random_join_ratio)
+                        selected_ids = select_agent.select_clients(i)
+                    else:
+                        # After the first round, pass actual gradients
+                        select_agent = RSVDUCBClientSelection(self.num_clients, self.num_join_clients)
+                        selected_ids = select_agent.select_clients(i, self.client_gradients)
+                elif self.select_clients_algorithm == "RSVDUCBT":
+                    # For the first round, use random selection
+                    if not self.gradients_available:
+                        select_agent = Random(self.num_clients, self.num_join_clients, self.random_join_ratio)
+                        selected_ids = select_agent.select_clients(i)
+                    else:
+                        # After the first round, pass actual gradients
+                        select_agent = RSVDUCBThompson(self.num_clients, self.num_join_clients)
+                        selected_ids = select_agent.select_clients(i, self.client_gradients)
+                else:
+                    # For other algorithms, select clients without gradients (or as needed)
+                    selected_ids = select_agent.select_clients(i)
+                
+                print("Selected clients:", selected_ids)
+                self.selected_clients = [self.clients[c] for c in selected_ids]
 
                 # self.send_models()
 
@@ -84,9 +140,9 @@ class FedAvg(Server):
                 #     print("\nEvaluate global model")
                 #     self.evaluate()
 
-                selected_ids = select_agent.select_clients(i)
+                '''selected_ids = select_agent.select_clients(i)
                 print("selected clients:", selected_ids)
-                self.selected_clients = [self.clients[c] for c in selected_ids]
+                self.selected_clients = [self.clients[c] for c in selected_ids]'''
 
                 # self.selected_clients = self.select_clients()
                 # s = [c.id for c in self.selected_clients]
@@ -118,8 +174,20 @@ class FedAvg(Server):
                 # self.selected_clients = self.select_clients_by_trust()
                 # <= mh code 
 
+                
+                # Train each selected client and collect gradients
                 for client in self.selected_clients:
                     client.train()
+                    if self.select_clients_algorithm in ["RSVD", "RSVDUCB", "RSVDUCBT"]:
+                        gradients = client.get_training_gradients()  # Get gradients after training
+                        self.client_gradients[client.id] = gradients  # Store gradients
+
+                # After the first round, set the flag to True to start using gradients in future rounds
+                if not self.gradients_available:
+                    self.gradients_available = True
+
+                '''for client in self.selected_clients:
+                    client.train()'''
 
                 # threads = [Thread(target=client.train)
                 #            for client in self.selected_clients]
@@ -195,6 +263,27 @@ class FedAvg(Server):
                 # rewards = clients_acc
                 # select_agent.update(selected_ids, rewards)
 
+
+                '''
+                calculate each model's accuracy
+                '''
+                if self.select_clients_algorithm in ["RSVD", "RSVDUCB", "RSVDUCBT"] and self.gradients_available:
+                    clients_acc = []
+                    for client_model, client in zip(self.uploaded_models, self.selected_clients):
+                        test_acc, test_num, auc= self.test_metrics_all(client_model, testloaderfull)
+                        print(test_acc/test_num)
+                        clients_acc.append(test_acc/test_num)
+
+                    #clients_acc_weight = list(map(lambda x: x/sum(clients_acc), clients_acc))
+
+                    reward_decay = 1
+                    for reward, client in zip(clients_acc, self.selected_clients):
+                        self.sums_of_reward[client.id] =  self.sums_of_reward[client.id] * reward_decay + reward
+                        self.numbers_of_selections[client.id] += 1
+                    
+                    rewards = clients_acc
+                    select_agent.update(selected_ids, rewards)
+
                 '''
                 check whether it is melicious node and record
                 '''
@@ -229,7 +318,12 @@ class FedAvg(Server):
                 if i%self.eval_gap == 0:
                     # print(f"\n-------------Round number: {i}-------------")
                     print("\nEvaluate global model")
-                    acc, train_loss, auc = self.evaluate()
+                    
+                    if self.select_clients_algorithm in ["RSVD", "RSVDUCB", "RSVDUCBT"] and self.gradients_available:
+                        acc, train_loss, auc = self.evaluate_trust()
+                    else:
+                        acc, train_loss, auc = self.evaluate()
+                    
                     # acc, train_loss = self.evaluate_trust()
                     self.acc_data.append(acc)
                     self.loss_data.append(train_loss)
@@ -265,9 +359,6 @@ class FedAvg(Server):
 
         self.save_results()
         self.save_global_model()
-
-
-
 
     def compute_robustLR(self, agent_updates):
         agent_updates_sign = [torch.sign(update) for update in agent_updates]  
