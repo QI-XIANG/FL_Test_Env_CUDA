@@ -138,5 +138,5 @@ class GAClientSelection:
                 self.performance_history[client] * reward_decay + reward
             )
 
-        print("Updated numbers of selections:", self.numbers_of_selections)
-        print("Updated performance history:", self.performance_history)
+        #print("Updated numbers of selections:", self.numbers_of_selections)
+        #print("Updated performance history:", self.performance_history)

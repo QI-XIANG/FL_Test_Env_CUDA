@@ -18,7 +18,6 @@ from flcore.servers.client_selection.UCB import UCB
 from flcore.servers.client_selection.RCS import RandomClusterSelection
 from flcore.servers.client_selection.DECS import DiversityEnhancedClusterSelection
 from flcore.servers.client_selection.GAC import GAClientSelection
-from flcore.servers.client_selection.DMSS import DynamicMultiStrategySelection
 from flcore.servers.client_selection.RSVD import RSVDClientDetection
 from flcore.servers.client_selection.RSVDUCB import RSVDUCBClientSelection
 from flcore.servers.client_selection.RSVDUCBT import RSVDUCBThompson
@@ -71,8 +70,6 @@ class FedAvg(Server):
             select_agent = UCB(self.num_clients, self.num_join_clients)
         elif self.select_clients_algorithm == "GAC":
             select_agent = GAClientSelection(self.num_clients, self.num_join_clients)
-        elif self.select_clients_algorithm == "DMSS":
-            select_agent = DynamicMultiStrategySelection(self.num_clients, self.num_join_clients)
         elif self.select_clients_algorithm == "RSVD":
             select_agent = RSVDClientDetection(self.num_clients, self.num_join_clients)
         elif self.select_clients_algorithm == "RSVDUBC":
@@ -271,7 +268,24 @@ class FedAvg(Server):
                     clients_acc = []
                     for client_model, client in zip(self.uploaded_models, self.selected_clients):
                         test_acc, test_num, auc= self.test_metrics_all(client_model, testloaderfull)
-                        print(test_acc/test_num)
+                        #print(test_acc/test_num)
+                        clients_acc.append(test_acc/test_num)
+
+                    #clients_acc_weight = list(map(lambda x: x/sum(clients_acc), clients_acc))
+
+                    reward_decay = 1
+                    for reward, client in zip(clients_acc, self.selected_clients):
+                        self.sums_of_reward[client.id] =  self.sums_of_reward[client.id] * reward_decay + reward
+                        self.numbers_of_selections[client.id] += 1
+                    
+                    rewards = clients_acc
+                    select_agent.update(selected_ids, rewards)
+                
+                if self.select_clients_algorithm in ["UCB", "GAC"]:
+                    clients_acc = []
+                    for client_model, client in zip(self.uploaded_models, self.selected_clients):
+                        test_acc, test_num, auc= self.test_metrics_all(client_model, testloaderfull)
+                        #print(test_acc/test_num)
                         clients_acc.append(test_acc/test_num)
 
                     #clients_acc_weight = list(map(lambda x: x/sum(clients_acc), clients_acc))
@@ -321,7 +335,7 @@ class FedAvg(Server):
                     
                     if self.select_clients_algorithm in ["RSVD", "RSVDUCB", "RSVDUCBT"] and self.gradients_available:
                         acc, train_loss, auc = self.evaluate_trust()
-                    elif self.select_clients_algorithm == "UCB":
+                    elif self.select_clients_algorithm in ["UCB", "GAC"]:
                         acc, train_loss, auc = self.evaluate_trust()
                     else:
                         acc, train_loss, auc = self.evaluate()

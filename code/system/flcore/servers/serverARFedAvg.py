@@ -10,6 +10,10 @@ from flcore.servers.client_selection.Random import Random
 from flcore.servers.client_selection.Thompson import Thompson
 from flcore.servers.client_selection.UCB import UCB
 from flcore.servers.client_selection.AUCB import AdaptiveUCB
+from flcore.servers.client_selection.GAC import GAClientSelection
+from flcore.servers.client_selection.RSVD import RSVDClientDetection
+from flcore.servers.client_selection.RSVDUCB import RSVDUCBClientSelection
+from flcore.servers.client_selection.RSVDUCBT import RSVDUCBThompson
 
 
 class AdaptiveRobustFedAvg(Server):
@@ -29,10 +33,14 @@ class AdaptiveRobustFedAvg(Server):
         self.dlg_gap = args.dlg_gap
         self.auto_break = args.auto_break
         self.top_cnt = 10  # Use a fixed top count threshold (you may adjust this as needed)
-
+        self.weight_option = "adaptive"  # Fixed weight option
         # Initialize clients and set slow clients
         self.set_slow_clients()
         self.set_clients(args, clientAVG)
+
+        # Initialize client gradients (RSVD purpose)
+        self.client_gradients = {}  # Store gradients for each client
+        self.gradients_available = False  # Flag to track if gradients are available
         
         print(f"\nJoin ratio / total clients: {self.num_join_clients} / {self.num_clients}")
         print("Finished creating server and clients.")
@@ -61,19 +69,54 @@ class AdaptiveRobustFedAvg(Server):
             for i in range(self.global_rounds + 1):
                 s_t = time.time()
 
-                selected_ids = select_agent.select_clients(i)
+                # If RSVD is selected, we pass gradients for each round
+                if self.select_clients_algorithm == "RSVD":
+                    # For the first round, use random selection
+                    if not self.gradients_available:
+                        select_agent = Random(self.num_clients, self.num_join_clients, self.random_join_ratio)
+                        selected_ids = select_agent.select_clients(i)
+                    else:
+                        # After the first round, pass actual gradients
+                        select_agent = RSVDClientDetection(self.num_clients, self.num_join_clients)
+                        selected_ids = select_agent.select_clients(i, self.client_gradients)
+                elif self.select_clients_algorithm == "RSVDUCB":
+                    # For the first round, use random selection
+                    if not self.gradients_available:
+                        select_agent = Random(self.num_clients, self.num_join_clients, self.random_join_ratio)
+                        selected_ids = select_agent.select_clients(i)
+                    else:
+                        # After the first round, pass actual gradients
+                        select_agent = RSVDUCBClientSelection(self.num_clients, self.num_join_clients)
+                        selected_ids = select_agent.select_clients(i, self.client_gradients)
+                elif self.select_clients_algorithm == "RSVDUCBT":
+                    # For the first round, use random selection
+                    if not self.gradients_available:
+                        select_agent = Random(self.num_clients, self.num_join_clients, self.random_join_ratio)
+                        selected_ids = select_agent.select_clients(i)
+                    else:
+                        # After the first round, pass actual gradients
+                        select_agent = RSVDUCBThompson(self.num_clients, self.num_join_clients)
+                        selected_ids = select_agent.select_clients(i, self.client_gradients)
+                else:
+                    # For other algorithms, select clients without gradients (or as needed)
+                    selected_ids = select_agent.select_clients(i)
+
                 print("Selected clients:", selected_ids)
                 self.selected_clients = [self.clients[c] for c in selected_ids]
 
                 print(f"\n-------------Round number: {i}-------------")
                 print(f"History acc: {self.acc_his}")
 
-                # Parallelize client training using ThreadPoolExecutor
-                threads = [Thread(target=client.train) for client in self.selected_clients]
-                for thread in threads:
-                    thread.start()
-                for thread in threads:
-                    thread.join()
+                # Train each selected client and collect gradients
+                for client in self.selected_clients:
+                    client.train()
+                    if self.select_clients_algorithm in ["RSVD", "RSVDUCB", "RSVDUCBT"]:
+                        gradients = client.get_training_gradients()  # Get gradients after training
+                        self.client_gradients[client.id] = gradients  # Store gradients
+
+                # After the first round, set the flag to True to start using gradients in future rounds
+                if not self.gradients_available:
+                    self.gradients_available = True
 
                 self.receive_models()
 
@@ -81,12 +124,42 @@ class AdaptiveRobustFedAvg(Server):
                 clients_acc, clients_acc_weight = self._evaluate_clients(testloaderfull)
 
                 # Update rewards and client selection
-                reward_decay = 1
-                for reward, client in zip(clients_acc, self.selected_clients):
-                    self.sums_of_reward[client.id] = self.sums_of_reward[client.id] * reward_decay + reward
-                    self.numbers_of_selections[client.id] += 1
+                '''
+                calculate each model's accuracy
+                '''
+                if self.select_clients_algorithm in ["RSVD", "RSVDUCB", "RSVDUCBT"] and self.gradients_available:
+                    clients_acc = []
+                    for client_model, client in zip(self.uploaded_models, self.selected_clients):
+                        test_acc, test_num, auc= self.test_metrics_all(client_model, testloaderfull)
+                        #print(test_acc/test_num)
+                        clients_acc.append(test_acc/test_num)
 
-                select_agent.update(selected_ids, clients_acc)
+                    #clients_acc_weight = list(map(lambda x: x/sum(clients_acc), clients_acc))
+
+                    reward_decay = 1
+                    for reward, client in zip(clients_acc, self.selected_clients):
+                        self.sums_of_reward[client.id] =  self.sums_of_reward[client.id] * reward_decay + reward
+                        self.numbers_of_selections[client.id] += 1
+                    
+                    rewards = clients_acc
+                    select_agent.update(selected_ids, rewards)
+                
+                if self.select_clients_algorithm in ["UCB"]:
+                    clients_acc = []
+                    for client_model, client in zip(self.uploaded_models, self.selected_clients):
+                        test_acc, test_num, auc= self.test_metrics_all(client_model, testloaderfull)
+                        #print(test_acc/test_num)
+                        clients_acc.append(test_acc/test_num)
+
+                    #clients_acc_weight = list(map(lambda x: x/sum(clients_acc), clients_acc))
+
+                    reward_decay = 1
+                    for reward, client in zip(clients_acc, self.selected_clients):
+                        self.sums_of_reward[client.id] =  self.sums_of_reward[client.id] * reward_decay + reward
+                        self.numbers_of_selections[client.id] += 1
+                    
+                    rewards = clients_acc
+                    select_agent.update(selected_ids, rewards)
 
                 # Evaluate if necessary
                 if self.dlg_eval and i % self.dlg_gap == 0:
@@ -129,6 +202,14 @@ class AdaptiveRobustFedAvg(Server):
             return AdaptiveUCB(self.num_clients, self.num_join_clients)
         elif self.client_selection_algorithm == "Thompson":
             return Thompson(num_clients=self.num_clients, num_selections=self.num_join_clients)
+        elif self.select_clients_algorithm == "GAC":
+            select_agent = GAClientSelection(self.num_clients, self.num_join_clients)
+        elif self.select_clients_algorithm == "RSVD":
+            select_agent = RSVDClientDetection(self.num_clients, self.num_join_clients)
+        elif self.select_clients_algorithm == "RSVDUBC":
+            select_agent = RSVDUCBClientSelection(self.num_clients, self.num_join_clients)
+        elif self.select_clients_algorithm == "RSVDUCBT":
+            select_agent = RSVDUCBThompson(self.num_clients, self.num_join_clients)
         else:
             raise ValueError(f"Unsupported client selection algorithm: {self.client_selection_algorithm}")
 
@@ -137,7 +218,7 @@ class AdaptiveRobustFedAvg(Server):
         clients_acc = []
         for client_model, client in zip(self.uploaded_models, self.selected_clients):
             test_acc, test_num, auc = self.test_metrics_all(client_model, testloader)
-            print(f"Test accuracy: {test_acc / test_num:.4f}")
+            #print(f"Test accuracy: {test_acc / test_num:.4f}")
             clients_acc.append(test_acc / test_num)
 
         # Normalize the accuracies to use as weights
