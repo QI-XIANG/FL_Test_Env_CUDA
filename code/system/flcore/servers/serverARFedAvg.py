@@ -12,7 +12,7 @@ from flcore.servers.client_selection.UCB import UCB
 from flcore.servers.client_selection.AUCB import AdaptiveUCB
 from flcore.servers.client_selection.GAC import GAClientSelection
 from flcore.servers.client_selection.RSVD import RSVDClientDetection
-from flcore.servers.client_selection.RSVDUCB import RSVDUCBClientSelection
+from flcore.servers.client_selection.RSVDUCB_old import RSVDUCBClientSelection
 from flcore.servers.client_selection.RSVDUCBT import RSVDUCBThompson
 
 

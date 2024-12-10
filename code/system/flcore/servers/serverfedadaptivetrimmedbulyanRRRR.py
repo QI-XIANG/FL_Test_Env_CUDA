@@ -16,6 +16,9 @@ from flcore.servers.client_selection.DECS import DiversityEnhancedClusterSelecti
 from flcore.servers.client_selection.ECS import EnhancedClusterSelection
 from flcore.servers.client_selection.UCBECS import UCBEnhancedClusterSelection
 from flcore.servers.client_selection.AUCB import AdaptiveUCB
+from flcore.servers.client_selection.RSVD import RSVDClientDetection
+from flcore.servers.client_selection.RSVDUCB_old import RSVDUCBClientSelection
+from flcore.servers.client_selection.RSVDUCBT import RSVDUCBThompson
 
 class RobustFedBulyanRRRR(Server):
     def __init__(self, args, times, agent=None, epsilon=0.1, decay_factor=0.99):
@@ -28,6 +31,10 @@ class RobustFedBulyanRRRR(Server):
         self.set_clients(args, clientAVG)
         self.robustLR_threshold = 7
         self.server_lr = 1e-3
+
+        # Initialize client gradients (RSVD purpose)
+        self.client_gradients = {}  # Store gradients for each client
+        self.gradients_available = False  # Flag to track if gradients are available
 
         # Initialize performance scores for clients
         self.performance_scores = np.ones(self.num_clients)
@@ -136,6 +143,8 @@ class RobustFedBulyanRRRR(Server):
             select_agent = AdaptiveUCB(self.num_clients, self.num_join_clients)
         elif self.args.select_clients_algorithm == "Thompson":
             select_agent = Thompson(num_clients=self.num_clients, num_selections=self.num_join_clients)
+        elif self.args.select_clients_algorithm == "RSVDUCBT":
+            select_agent = RSVDUCBThompson(self.num_clients, self.num_join_clients)
 
         mlflow.set_experiment(self.select_clients_algorithm)
         with mlflow.start_run(run_name=f"noniid_wbn_{self.num_clients * self.poisoned_ratio}_FedBulyan"):
@@ -147,7 +156,38 @@ class RobustFedBulyanRRRR(Server):
             for i in range(self.global_rounds + 1):
                 s_t = time.time()
 
-                selected_ids = self.select_clients_with_bias(select_agent, i)
+                # If RSVD is selected, we pass gradients for each round
+                if self.select_clients_algorithm == "RSVD":
+                    # For the first round, use random selection
+                    if not self.gradients_available:
+                        select_agent = Random(self.num_clients, self.num_join_clients, self.random_join_ratio)
+                        selected_ids = select_agent.select_clients(i)
+                    else:
+                        # After the first round, pass actual gradients
+                        select_agent = RSVDClientDetection(self.num_clients, self.num_join_clients)
+                        selected_ids = select_agent.select_clients(i, self.client_gradients)
+                elif self.select_clients_algorithm == "RSVDUCB":
+                    # For the first round, use random selection
+                    if not self.gradients_available:
+                        select_agent = Random(self.num_clients, self.num_join_clients, self.random_join_ratio)
+                        selected_ids = select_agent.select_clients(i)
+                    else:
+                        # After the first round, pass actual gradients
+                        select_agent = RSVDUCBClientSelection(self.num_clients, self.num_join_clients)
+                        selected_ids = select_agent.select_clients(i, self.client_gradients)
+                elif self.select_clients_algorithm == "RSVDUCBT":
+                    # For the first round, use random selection
+                    if not self.gradients_available:
+                        select_agent = Random(self.num_clients, self.num_join_clients, self.random_join_ratio)
+                        selected_ids = select_agent.select_clients(i)
+                    else:
+                        # After the first round, pass actual gradients
+                        select_agent = RSVDUCBThompson(self.num_clients, self.num_join_clients)
+                        selected_ids = select_agent.select_clients(i, self.client_gradients)
+                else:
+                    # For other algorithms, select clients without gradients (or as needed)
+                    selected_ids = self.select_clients_with_bias(select_agent, i)
+
                 self.selected_clients = [self.clients[c] for c in selected_ids]
 
                 print(f"\n-------------Round number: {i}-------------")
@@ -165,8 +205,53 @@ class RobustFedBulyanRRRR(Server):
 
                 for client in self.selected_clients:
                     client.train()
+                    if self.select_clients_algorithm in ["RSVD", "RSVDUCB", "RSVDUCBT"]:
+                        gradients = client.get_training_gradients()  # Get gradients after training
+                        self.client_gradients[client.id] = gradients  # Store gradients
+                
+                # After the first round, set the flag to True to start using gradients in future rounds
+                if not self.gradients_available:
+                    self.gradients_available = True
 
                 self.receive_models()
+
+                '''
+                calculate each model's accuracy
+                '''
+                if self.select_clients_algorithm in ["RSVD", "RSVDUCB", "RSVDUCBT"] and self.gradients_available:
+                    clients_acc = []
+                    for client_model, client in zip(self.uploaded_models, self.selected_clients):
+                        test_acc, test_num, auc= self.test_metrics_all(client_model, testloaderfull)
+                        #print(test_acc/test_num)
+                        clients_acc.append(test_acc/test_num)
+
+                    #clients_acc_weight = list(map(lambda x: x/sum(clients_acc), clients_acc))
+
+                    reward_decay = 1
+                    for reward, client in zip(clients_acc, self.selected_clients):
+                        self.sums_of_reward[client.id] =  self.sums_of_reward[client.id] * reward_decay + reward
+                        self.numbers_of_selections[client.id] += 1
+                    
+                    rewards = clients_acc
+                    select_agent.update(selected_ids, rewards)
+                
+                if self.select_clients_algorithm in ["UCB", "GAC"]:
+                    clients_acc = []
+                    for client_model, client in zip(self.uploaded_models, self.selected_clients):
+                        test_acc, test_num, auc= self.test_metrics_all(client_model, testloaderfull)
+                        #print(test_acc/test_num)
+                        clients_acc.append(test_acc/test_num)
+
+                    #clients_acc_weight = list(map(lambda x: x/sum(clients_acc), clients_acc))
+
+                    reward_decay = 1
+                    for reward, client in zip(clients_acc, self.selected_clients):
+                        self.sums_of_reward[client.id] =  self.sums_of_reward[client.id] * reward_decay + reward
+                        self.numbers_of_selections[client.id] += 1
+                    
+                    rewards = clients_acc
+                    select_agent.update(selected_ids, rewards)
+                
                 clients_weight = [parameters_to_vector(i.parameters()).cpu().detach().numpy() for i in self.uploaded_models]
 
                 bulyan_client_indices = self.robust_bulyan(clients_weight, int(self.num_join_clients * self.poisoned_ratio), drop_percentage=0.1)
@@ -182,7 +267,14 @@ class RobustFedBulyanRRRR(Server):
 
                 if i % self.eval_gap == 0:
                     print("\nEvaluate global model")
-                    acc, train_loss, auc = self.evaluate()
+
+                    if self.select_clients_algorithm in ["RSVD", "RSVDUCB", "RSVDUCBT"] and self.gradients_available:
+                        acc, train_loss, auc = self.evaluate_trust()
+                    elif self.select_clients_algorithm in ["UCB", "GAC"]:
+                        acc, train_loss, auc = self.evaluate_trust()
+                    else:
+                        acc, train_loss, auc = self.evaluate()
+
                     self.acc_data.append(acc)
                     self.loss_data.append(train_loss)
                     self.auc_data.append(auc)
