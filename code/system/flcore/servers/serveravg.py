@@ -96,6 +96,8 @@ class FedAvg(Server):
             mlflow.log_param("algorithm", self.algorithm)
             mlflow.log_param("num_clients", self.num_clients)
 
+            counter_for_RSVD = 0
+
             for i in range(self.global_rounds+1):
                 s_t = time.time()
                 
@@ -105,11 +107,15 @@ class FedAvg(Server):
                     if not self.gradients_available:
                         select_agent = Random(self.num_clients, self.num_join_clients, self.random_join_ratio)
                         selected_ids = select_agent.select_clients(i)
+                        counter_for_RSVD += 1
                     else:
                         # After the first round, pass actual gradients
-                        select_agent = RSVDClientDetection(self.num_clients, self.num_join_clients)
+                        # Prevent reinitialization of select_agent
+                        if counter_for_RSVD == 1:
+                            select_agent = RSVDClientDetection(self.num_clients, self.num_join_clients)
                         selected_ids = select_agent.select_clients(i, self.client_gradients)
-                
+                        counter_for_RSVD += 1
+
                 elif self.select_clients_algorithm == "RSVDUCB":
                     # For the first round, use random selection
                     if not self.gradients_available:
@@ -125,20 +131,28 @@ class FedAvg(Server):
                     if not self.gradients_available:
                         select_agent = Random(self.num_clients, self.num_join_clients, self.random_join_ratio)
                         selected_ids = select_agent.select_clients(i)
+                        counter_for_RSVD += 1
                     else:
                         # After the first round, pass actual gradients
-                        select_agent = RSVDUCBThompson(self.num_clients, self.num_join_clients)
+                        # Prevent reinitialization of select_agent
+                        if counter_for_RSVD == 1:
+                            select_agent = RSVDUCBThompson(self.num_clients, self.num_join_clients)
                         selected_ids = select_agent.select_clients(i, self.client_gradients)
+                        counter_for_RSVD += 1
                 
                 elif self.select_clients_algorithm == "RSVDUCBTE":
                     # For the first round, use random selection
                     if not self.gradients_available:
                         select_agent = Random(self.num_clients, self.num_join_clients, self.random_join_ratio)
                         selected_ids = select_agent.select_clients(i)
+                        counter_for_RSVD += 1
                     else:
                         # After the first round, pass actual gradients
-                        select_agent = RSVDUCBThompsonEnhanced(self.num_clients, self.num_join_clients, self.global_accuracy_history)
+                        # Prevent reinitialization of select_agent
+                        if counter_for_RSVD == 1:
+                            select_agent = RSVDUCBThompsonEnhanced(self.num_clients, self.num_join_clients, self.global_accuracy_history)
                         selected_ids = select_agent.select_clients(i, self.client_gradients)
+                        counter_for_RSVD += 1
                 
                 else:
                     # For other algorithms, select clients without gradients (or as needed)
