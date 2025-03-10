@@ -1,4 +1,2 @@
-dataset/Cifar100_dir1
-dataset/Cifar100
-dataset/CelebA
-Lib/site-packages/
+# Auto-generated large file ignores
+FL_Test_Env_CUDA/.git/objects/pack/pack-2db33e8da1a95cc697060afe8ee085c272e565df.pack

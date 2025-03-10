@@ -78,6 +78,10 @@ def run(args):
                 args.model = FedAvgCNN(in_features=1, num_classes=args.num_classes, dim=1024).to(args.device)
             elif "fmnist40" in args.dataset:
                 args.model = FedAvgCNN(in_features=1, num_classes=args.num_classes, dim=1024).to(args.device)
+            elif "fmnist600" in args.dataset:
+                args.model = FedAvgCNN(in_features=1, num_classes=args.num_classes, dim=1024).to(args.device)
+            elif "fmnist40_Tadaptive" in args.dataset:
+                args.model = FedAvgCNN(in_features=1, num_classes=args.num_classes, dim=1024).to(args.device)
             elif "Cifar10" in args.dataset:
                 args.model = FedAvgCNN(in_features=3, num_classes=args.num_classes, dim=1600).to(args.device)
             elif "omniglot" in args.dataset:
